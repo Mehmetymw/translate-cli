@@ -7,33 +7,81 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
-const baseURL = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=%s&tl=%s&q="
+const (
+	baseURL     = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=%s&tl=%s&q="
+	configFile  = "config.json"
+	defaultLang = "en"
+)
 
-var sourceLang string
-var targetLang string
+var (
+	sourceLang string
+	targetLang string
+	reverse    bool
+	setLang    bool
+)
 
 func init() {
-	var trFlag bool
-	flag.BoolVar(&trFlag, "tr", false, "Translate from Turkish to English")
-
+	flag.StringVar(&sourceLang, "s", "", "Source language")
+	flag.StringVar(&targetLang, "t", "", "Target language")
+	flag.BoolVar(&reverse, "reverse", false, "Reverse translation")
+	flag.BoolVar(&setLang, "set", false, "Set default languages")
 	flag.Parse()
 
-	if trFlag {
-		sourceLang = "tr"
-		targetLang = "en"
-	} else {
-		sourceLang = "en"
-		targetLang = "tr"
+	if setLang {
+		saveConfig(sourceLang, targetLang)
+	}
+
+	if sourceLang == "" || targetLang == "" {
+		loadConfig()
 	}
 }
 
-func translate(text string) ([]string, error) {
+func saveConfig(source, target string) {
+	config := map[string]string{
+		"sourceLang": source,
+		"targetLang": target,
+	}
+	file, err := os.Create(configFile)
+	if err != nil {
+		fmt.Printf("Error creating config file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	if err := json.NewEncoder(file).Encode(config); err != nil {
+		fmt.Printf("Error saving config: %v\n", err)
+	}
+}
+
+func loadConfig() {
+	config := map[string]string{}
+	file, err := os.Open(configFile)
+	if err != nil {
+		sourceLang = defaultLang
+		targetLang = defaultLang
+		return
+	}
+	defer file.Close()
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		fmt.Printf("Error reading config: %v\n", err)
+		sourceLang = defaultLang
+		targetLang = defaultLang
+		return
+	}
+
+	sourceLang = config["sourceLang"]
+	targetLang = config["targetLang"]
+}
+
+func translate(text string, sourceLang, targetLang string) ([]string, error) {
 	query := url.QueryEscape(text)
-	url := fmt.Sprintf(baseURL, sourceLang, targetLang) + query
-	response, err := http.Get(url)
+	translateURL := fmt.Sprintf(baseURL, sourceLang, targetLang) + query
+	response, err := http.Get(translateURL)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request error: %v", err)
 	}
@@ -83,7 +131,10 @@ func main() {
 	}
 
 	text := strings.Join(flag.Args(), " ")
-	translatedTexts, err := translate(text)
+	if reverse {
+		sourceLang, targetLang = targetLang, sourceLang
+	}
+	translatedTexts, err := translate(text, sourceLang, targetLang)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
