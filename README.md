@@ -58,8 +58,10 @@ Set the default source and target languages:
 ```sh
 translate-cli -set -s <source> -t <target>
 ex: translate-cli -set -s en -t tr (English to Turkish)
+
 translate-cli <text>
 ex: translate-cli Hello (It will remember setted config and translate English to Turkish directly)
+
 translate-cli -reverse <text>
 ex: translate-cli Merhaba (It will remember your setted config and will reversed translate Turkish to English directly)
 
